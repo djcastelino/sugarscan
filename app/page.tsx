@@ -1,12 +1,65 @@
 'use client'
 
-import { useState } from 'react'
-import { Camera, Search, AlertCircle, CheckCircle, XCircle, Sparkles } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Camera, Search, AlertCircle, CheckCircle, XCircle, Sparkles, X } from 'lucide-react'
+import { Html5Qrcode } from 'html5-qrcode'
 
 export default function Home() {
   const [barcode, setBarcode] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
+  const [showScanner, setShowScanner] = useState(false)
+  const [html5QrCode, setHtml5QrCode] = useState<Html5Qrcode | null>(null)
+
+  useEffect(() => {
+    if (showScanner && !html5QrCode) {
+      const qrCode = new Html5Qrcode("reader")
+      setHtml5QrCode(qrCode)
+    }
+
+    return () => {
+      if (html5QrCode) {
+        html5QrCode.stop().catch(() => {})
+      }
+    }
+  }, [showScanner])
+
+  const startScanner = async () => {
+    if (!html5QrCode) return
+
+    try {
+      await html5QrCode.start(
+        { facingMode: "environment" }, // Use back camera
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 }
+        },
+        (decodedText) => {
+          setBarcode(decodedText)
+          stopScanner()
+        },
+        () => {} // Ignore errors during scanning
+      )
+    } catch (err) {
+      console.error("Error starting scanner:", err)
+      alert("Camera access denied or not available. Please enter barcode manually.")
+      setShowScanner(false)
+    }
+  }
+
+  const stopScanner = () => {
+    if (html5QrCode) {
+      html5QrCode.stop().then(() => {
+        setShowScanner(false)
+      }).catch(() => {})
+    }
+  }
+
+  useEffect(() => {
+    if (showScanner && html5QrCode) {
+      startScanner()
+    }
+  }, [showScanner, html5QrCode])
 
   const handleScan = async () => {
     if (!barcode.trim()) return
@@ -57,6 +110,27 @@ export default function Home() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-8">
+        {/* Scanner Modal */}
+        {showScanner && (
+          <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Scan Barcode</h3>
+                <button
+                  onClick={stopScanner}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div id="reader" className="w-full"></div>
+              <p className="text-xs text-gray-500 mt-4 text-center">
+                Point your camera at the product barcode
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Scan Card */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
@@ -64,7 +138,7 @@ export default function Home() {
             Scan Product Barcode
           </h2>
           
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-3">
             <input
               type="text"
               value={barcode}
@@ -92,102 +166,82 @@ export default function Home() {
             </button>
           </div>
 
+          <button
+            onClick={() => setShowScanner(true)}
+            className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl transition-all flex items-center justify-center gap-2 font-medium"
+          >
+            <Camera className="w-5 h-5" />
+            Use Camera Scanner
+          </button>
+
           <p className="text-xs text-gray-500 mt-2">
-            Try: 737628064502 (Trader Joe's Pad Thai), 041520893164 (Clif Bar), or 0016000119178
+            Try: 737628064502 (Trader Joe's Pad Thai), 041520893164 (Clif Bar)
           </p>
         </div>
 
         {/* Results */}
         {result && (
-          <div className="space-y-4">
+          <div className="bg-white rounded-2xl shadow-lg p-6 animate-fade-in">
             {result.error ? (
-              <div className="bg-red-50 border border-red-200 rounded-2xl p-6">
-                <div className="flex items-start gap-3">
-                  <XCircle className="w-6 h-6 text-red-600 mt-0.5" />
-                  <div>
-                    <h3 className="font-semibold text-red-900">Product Not Found</h3>
-                    <p className="text-red-700 text-sm mt-1">{result.error}</p>
-                  </div>
-                </div>
+              <div className="text-center py-8">
+                <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                <p className="text-gray-600">{result.error}</p>
               </div>
             ) : (
               <>
-                {/* Product Info */}
-                <div className="bg-white rounded-2xl shadow-lg p-6">
-                  <div className="flex items-start gap-4">
-                    {result.image && (
-                      <img 
-                        src={result.image} 
-                        alt={result.productName}
-                        className="w-24 h-24 rounded-xl object-cover"
-                      />
-                    )}
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-gray-900">{result.productName}</h3>
-                      {result.brands && (
-                        <p className="text-gray-600 mt-1">{result.brands}</p>
-                      )}
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
-                          {result.servingSize}
-                        </span>
-                        <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
-                          {result.calories} cal
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                {/* Product Header */}
+                <div className="border-b border-gray-200 pb-4 mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                    {result.productName}
+                  </h3>
+                  <p className="text-gray-600">{result.brand}</p>
                 </div>
 
-                {/* Sugar Analysis */}
-                {(() => {
-                  const rating = getSugarRating(result.sugarLevel)
-                  const Icon = rating.icon
-                  return (
-                    <div className={`${rating.bg} border-2 ${rating.color} border-current rounded-2xl p-6`}>
-                      <div className="flex items-start gap-3">
-                        <Icon className={`w-7 h-7 ${rating.color} mt-0.5`} />
-                        <div className="flex-1">
-                          <h3 className={`text-xl font-bold ${rating.color}`}>
-                            {result.sugarLevel} Sugar Content
-                          </h3>
-                          <p className={`text-lg font-semibold mt-2 ${rating.color}`}>
-                            {result.sugarsPerServing}
-                          </p>
-                          <p className="text-sm text-gray-700 mt-2">{result.sugarContext}</p>
-                        </div>
+                {/* Sugar Rating */}
+                {result.sugarLevel && (
+                  <div className={`${getSugarRating(result.sugarLevel).bg} rounded-xl p-6 mb-6`}>
+                    <div className="flex items-center gap-3 mb-3">
+                      {(() => {
+                        const Icon = getSugarRating(result.sugarLevel).icon
+                        return <Icon className={`w-8 h-8 ${getSugarRating(result.sugarLevel).color}`} />
+                      })()}
+                      <div>
+                        <p className="text-sm text-gray-600 font-medium">Sugar Level</p>
+                        <p className={`text-2xl font-bold ${getSugarRating(result.sugarLevel).color} capitalize`}>
+                          {result.sugarLevel}
+                        </p>
                       </div>
                     </div>
-                  )
-                })()}
-
-                {/* AI Recommendation */}
-                <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-6 border border-blue-200">
-                  <div className="flex items-start gap-3">
-                    <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-2 rounded-lg">
-                      <Sparkles className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-gray-900 text-lg mb-3">AI Health Analysis</h3>
-                      <p className="text-gray-700 leading-relaxed whitespace-pre-line">
-                        {result.aiRecommendation}
-                      </p>
-                    </div>
+                    <p className="text-gray-700">{result.sugarPerServing}</p>
                   </div>
-                </div>
+                )}
 
-                {/* Alternatives */}
+                {/* AI Analysis */}
+                {result.aiAnalysis && (
+                  <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 mb-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Sparkles className="w-5 h-5 text-purple-600" />
+                      <h4 className="font-semibold text-gray-900">AI Analysis</h4>
+                    </div>
+                    <p className="text-gray-700 leading-relaxed whitespace-pre-line">
+                      {result.aiAnalysis}
+                    </p>
+                  </div>
+                )}
+
+                {/* Healthier Alternatives */}
                 {result.alternatives && result.alternatives.length > 0 && (
-                  <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                      <CheckCircle className="w-5 h-5 text-green-600" />
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-3">
                       Healthier Alternatives
-                    </h3>
+                    </h4>
                     <div className="space-y-3">
                       {result.alternatives.map((alt: string, idx: number) => (
-                        <div key={idx} className="flex items-start gap-3 p-3 bg-green-50 rounded-xl">
-                          <div className="w-2 h-2 bg-green-600 rounded-full mt-2" />
-                          <p className="text-gray-700 flex-1">{alt}</p>
+                        <div
+                          key={idx}
+                          className="bg-green-50 rounded-lg p-4 border border-green-100"
+                        >
+                          <p className="text-gray-700">{alt}</p>
                         </div>
                       ))}
                     </div>
@@ -199,28 +253,21 @@ export default function Home() {
         )}
 
         {/* Info Cards */}
-        {!result && (
-          <div className="grid md:grid-cols-3 gap-4 mt-8">
-            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-              <h3 className="font-semibold text-gray-900 mb-2">🔍 Instant Analysis</h3>
-              <p className="text-sm text-gray-600">Get detailed sugar content breakdown in seconds</p>
-            </div>
-            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-              <h3 className="font-semibold text-gray-900 mb-2">🤖 AI Powered</h3>
-              <p className="text-sm text-gray-600">Smart recommendations based on your scan</p>
-            </div>
-            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-              <h3 className="font-semibold text-gray-900 mb-2">✨ Better Choices</h3>
-              <p className="text-sm text-gray-600">Discover healthier alternatives instantly</p>
-            </div>
+        <div className="grid md:grid-cols-2 gap-4 mt-6">
+          <div className="bg-white rounded-xl p-5 shadow">
+            <h3 className="font-semibold text-gray-900 mb-2">How it works</h3>
+            <p className="text-sm text-gray-600">
+              Scan or enter a product barcode. Our AI analyzes sugar content and provides personalized health insights.
+            </p>
           </div>
-        )}
+          <div className="bg-white rounded-xl p-5 shadow">
+            <h3 className="font-semibold text-gray-900 mb-2">Data Sources</h3>
+            <p className="text-sm text-gray-600">
+              Powered by OpenFoodFacts, USDA FoodData, and AI analysis for accurate nutritional information.
+            </p>
+          </div>
+        </div>
       </main>
-
-      {/* Footer */}
-      <footer className="max-w-4xl mx-auto px-4 py-8 text-center text-sm text-gray-600">
-        <p>Powered by OpenFoodFacts, USDA FoodData Central, and AI</p>
-      </footer>
     </div>
   )
 }
